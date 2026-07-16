@@ -84,6 +84,7 @@ import {
   paperInsights,
 } from './data';
 import { clinicalAnalytics } from './clinicalData';
+import { buildStudyReportText, toCsv } from './reporting';
 
 const sidebarWidth = 292;
 const enrollmentData = clinicalAnalytics.enrollmentData;
@@ -107,34 +108,6 @@ function downloadTextFile(filename: string, content: string, type = 'text/plain'
   URL.revokeObjectURL(url);
 }
 
-function toCsv(rows: Array<Record<string, string | number>>) {
-  if (!rows.length) return '';
-  const headers = Object.keys(rows[0]);
-  const escape = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
-  return [headers.join(','), ...rows.map((row) => headers.map((header) => escape(row[header])).join(','))].join('\n');
-}
-
-function buildStudyReportText(title = 'Hypertension Efficacy Analysis Q3') {
-  return [
-    title,
-    '',
-    `Dataset: ${clinicalAnalytics.datasetName}`,
-    `Total unique patients: ${clinicalAnalytics.totalPatients}`,
-    `Total source rows: ${clinicalAnalytics.totalRows}`,
-    `Average age: ${clinicalAnalytics.averageAge}`,
-    `Data quality score: ${clinicalAnalytics.qualityScore}%`,
-    `Missing BP values: ${clinicalAnalytics.missingBpCount}`,
-    `Duplicate PatientIDs: ${clinicalAnalytics.duplicateIds.join(', ') || 'None'}`,
-    `Invalid age entries: ${clinicalAnalytics.invalidAgeCount}`,
-    `Diabetic-hypertension overlap: ${clinicalAnalytics.diabeticHypertensionPercent}%`,
-    `Compound-X controlled outcome rate: ${clinicalAnalytics.treatmentEffectiveness}%`,
-    '',
-    'Recommended next actions:',
-    '- Review duplicate PatientID records.',
-    '- Impute or source-verify missing blood pressure values.',
-    '- Flag biologically implausible ages before downstream analysis.',
-  ].join('\n');
-}
 
 function App() {
   const [active, setActive] = useState<NavKey>('dashboard');
@@ -700,8 +673,8 @@ function DataTable({ rows }: { rows: typeof patientRows }) {
         </TableRow>
       </TableHead>
       <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.id} sx={{ bgcolor: row.quality === 'Duplicate' ? '#eefcf8' : row.quality === 'Invalid' ? '#fff8f8' : 'inherit' }}>
+        {rows.map((row, index) => (
+          <TableRow key={`${row.id}-${index}`} sx={{ bgcolor: row.quality === 'Duplicate' ? '#eefcf8' : row.quality === 'Invalid' ? '#fff8f8' : 'inherit' }}>
             <TableCell>{row.id}</TableCell>
             <TableCell sx={{ color: row.age > 120 ? 'error.main' : 'inherit', fontWeight: row.age > 120 ? 900 : 500 }}>{row.age}</TableCell>
             <TableCell>{row.gender}</TableCell>

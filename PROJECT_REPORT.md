@@ -92,6 +92,7 @@ Implemented backend data-quality logic:
 Completed checks:
 
 ```text
+npm test
 npm exec tsc -- --noEmit
 npm run build
 Invoke-WebRequest http://127.0.0.1:5173
@@ -99,6 +100,7 @@ Invoke-WebRequest http://127.0.0.1:5173
 
 Results:
 
+- Node test suite passed with 8 tests.
 - TypeScript check passed.
 - Production Vite build passed.
 - Local frontend server returned HTTP 200.
@@ -189,6 +191,21 @@ Expected API:
 ```text
 http://127.0.0.1:8000
 ```
+
+Tests:
+
+```bash
+npm test
+```
+
+Current test coverage focuses on the TDD-style business rules that should remain stable:
+
+- packaged clinical dataset metrics
+- quality defect detection
+- cohort and protocol calculations
+- treatment/report metrics
+- CSV export formatting
+- study report text generation
 
 Docker option:
 
