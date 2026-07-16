@@ -1,0 +1,19 @@
+PatientID,Age,Gender,Race,Diagnosis,SystolicBP,DiastolicBP,Treatment,Outcome,Site,EnrolledMonth,LastLabDate,DiabetesType2,Hypertension,KidneyDisease
+CP-9901,45,M,White,Hypertension,140,90,Standard Care,Uncontrolled,NYC-01,Jan,2023-10-24,false,true,false
+CP-9902,250,F,Black,Hypotension,90,60,Standard Care,Controlled,NYC-01,Jan,2023-11-01,false,false,false
+CP-9903,32,M,Hispanic,N/A,,,Compound-X,Controlled,LON-04,Feb,2023-11-11,false,false,false
+CP-9904,58,M,Asian,Diabetes T2,120,80,Compound-X,Controlled,NYC-01,Feb,2023-11-14,true,false,false
+CP-9904,58,M,Asian,Diabetes T2,120,80,Compound-X,Controlled,NYC-01,Feb,2023-11-14,true,false,false
+CP-9905,61,F,White,Arrhythmia,135,85,Standard Care,Controlled,LON-04,Mar,2023-11-20,false,false,false
+CP-88421,68,M,Black,Diabetes T2; Hypertension,142,88,Compound-X,Controlled,NYC-01,Mar,2023-10-24,true,true,false
+CP-91203,72,F,White,Diabetes T2,155,92,Standard Care,Uncontrolled,LON-04,Mar,2023-11-12,true,false,false
+CP-77412,65,M,Hispanic,Diabetes T2; Kidney Disease,148,85,Standard Care,Readmitted,SFO-07,Apr,2024-01-02,true,false,true
+CP-11409,81,F,White,Diabetes T2,140,80,Compound-X,Controlled,BER-02,Apr,2023-12-15,true,false,false
+CP-10011,54,F,Asian,Hypertension,152,91,Compound-X,Controlled,NYC-01,Apr,2024-01-08,false,true,false
+CP-10012,49,M,Black,Diabetes T2; Hypertension,,,Compound-X,Controlled,LON-04,May,2024-01-13,true,true,false
+CP-10013,63,F,White,COPD,128,78,Standard Care,Controlled,SFO-07,May,2024-01-15,false,false,false
+CP-10014,59,M,Hispanic,Diabetes T2; Hypertension,146,87,Compound-X,Controlled,NYC-01,May,2024-01-22,true,true,false
+CP-10015,77,F,White,Hypertension,164,94,Standard Care,Readmitted,BER-02,Jun,2024-01-29,false,true,false
+CP-10016,52,F,Asian,Diabetes T2,118,76,Compound-X,Controlled,NYC-01,Jun,2024-02-02,true,false,false
+CP-10017,70,M,Black,Diabetes T2; Hypertension,170,96,Standard Care,Uncontrolled,LON-04,Jun,2024-02-08,true,true,false
+CP-10018,43,F,Hispanic,Hypertension,,,Compound-X,Controlled,SFO-07,Jun,2024-02-10,false,true,false
