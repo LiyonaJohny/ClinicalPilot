@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "lint": "tsc --noEmit",
-    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test tests/clinicalData.test.ts tests/reporting.test.ts"
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test tests/clinicalData.test.ts tests/reporting.test.ts tests/navigation.test.ts tests/activityRouting.test.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",

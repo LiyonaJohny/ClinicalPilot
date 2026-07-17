@@ -80,6 +80,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { getActivityRoute } from './activityRouting';
 import {
   activities,
   NavKey,
@@ -232,7 +233,7 @@ function App() {
             />
           </Stack>
 
-          {active === 'dashboard' && <DashboardView onAction={notify} />}
+          {active === 'dashboard' && <DashboardView onAction={notify} onNavigate={setActive} />}
           {active === 'datasets' && <DatasetView chatInput={chatInput} setChatInput={setChatInput} onAction={notify} onExportDataset={exportDataset} />}
           {active === 'papers' && <PaperAnalyzerView paperName={uploadedPaperName} onUploadPaper={requestPaperUpload} onAction={notify} onExportReport={exportReport} />}
           {active === 'cohorts' && <CohortDiscoveryView onAction={notify} />}
@@ -439,7 +440,7 @@ function HeaderActions({
   return <Button variant="contained" startIcon={<CloudUpload />} onClick={onUploadDataset}>Upload Dataset</Button>;
 }
 
-function DashboardView({ onAction }: { onAction: ActionHandler }) {
+function DashboardView({ onAction, onNavigate }: { onAction: ActionHandler; onNavigate: (key: NavKey) => void }) {
   return (
     <Stack spacing={3}>
       <Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: '#101928', color: '#d9e2ee', border: '1px solid #172437' }}>
@@ -539,7 +540,7 @@ function DashboardView({ onAction }: { onAction: ActionHandler }) {
           <MissingDataCard onAction={onAction} />
         </Grid>
         <Grid item xs={12} md={6}>
-          <ActivityCard onAction={onAction} />
+          <ActivityCard onAction={onAction} onNavigate={onNavigate} />
         </Grid>
       </Grid>
     </Stack>
@@ -598,7 +599,7 @@ function MissingDataCard({ onAction }: { onAction: ActionHandler }) {
   );
 }
 
-function ActivityCard({ onAction }: { onAction: ActionHandler }) {
+function ActivityCard({ onAction, onNavigate }: { onAction: ActionHandler; onNavigate: (key: NavKey) => void }) {
   return (
     <Card>
       <CardContent>
@@ -607,8 +608,20 @@ function ActivityCard({ onAction }: { onAction: ActionHandler }) {
           <Button size="small" onClick={() => onAction(`${activities.length} recent activities loaded.`)}>View All</Button>
         </Stack>
         <Stack spacing={2}>
-          {activities.map((activity, index) => (
-            <Stack key={activity} direction="row" spacing={2} alignItems="center">
+          {activities.map((activity, index) => {
+            const route = getActivityRoute(activity);
+            return (
+            <ListItemButton
+              key={activity}
+              onClick={() => {
+                if (route) {
+                  onNavigate(route.target);
+                  onAction(route.message);
+                }
+              }}
+              sx={{ alignItems: 'center', borderRadius: 1, px: 1, py: 1.2 }}
+            >
+              <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%' }}>
               <Avatar sx={{ bgcolor: index === 3 ? '#fde8e8' : index === 2 ? '#7cebd8' : '#e8f7f3', color: index === 3 ? '#c62828' : '#00796b' }}>
                 {index === 0 ? <UploadFile /> : index === 1 ? <Article /> : index === 2 ? <Psychology /> : <TaskAlt />}
               </Avatar>
@@ -616,8 +629,10 @@ function ActivityCard({ onAction }: { onAction: ActionHandler }) {
                 <Typography fontWeight={900}>{activity}</Typography>
                 <Typography color="text.secondary">{index === 0 ? 'Uploaded by Dr. Sarah Miller - 2 hours ago' : index === 1 ? 'System generated - 5 hours ago' : index === 2 ? 'Clinical cohort: Diabetes Focus - 1 day ago' : 'Mismatched timestamps detected - 2 days ago'}</Typography>
               </Box>
-            </Stack>
-          ))}
+              </Stack>
+            </ListItemButton>
+          );
+          })}
         </Stack>
       </CardContent>
     </Card>

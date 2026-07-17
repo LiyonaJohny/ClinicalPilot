@@ -100,7 +100,7 @@ Invoke-WebRequest http://127.0.0.1:5173
 
 Results:
 
-- Node test suite passed with 8 tests.
+- Node test suite passed with 16 tests.
 - TypeScript check passed.
 - Production Vite build passed.
 - Local frontend server returned HTTP 200.
@@ -206,6 +206,8 @@ Current test coverage focuses on the TDD-style business rules that should remain
 - treatment/report metrics
 - CSV export formatting
 - study report text generation
+- shared desktop/mobile navigation configuration
+- recent activity routing to related application sections
 
 Docker option:
 
