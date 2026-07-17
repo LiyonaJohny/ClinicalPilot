@@ -25,8 +25,11 @@ http://127.0.0.1:5173
 ## 3. Repository Structure
 
 - `src/App.tsx`: Main application UI and interactive workflows
+- `src/activityRouting.ts`: Recent activity navigation targets and feedback messages
 - `src/clinicalData.ts`: Packaged clinical demo records and computed analytics
 - `src/data.ts`: Navigation types, activity items, and paper insight demo content
+- `src/navigation.ts`: Shared desktop/mobile navigation configuration
+- `src/tableUtils.ts`: Shared search, sort, and pagination helpers for data tables
 - `src/theme.ts`: Material UI theme
 - `src/styles.css`: Global styles
 - `backend/app/main.py`: FastAPI app and API endpoints
@@ -53,8 +56,11 @@ http://127.0.0.1:5173
 - Dataset upload buttons now open a file picker and stage selected files locally.
 - Paper upload area now opens a file picker and updates the displayed paper name.
 - Dataset table filter toggles between all rows and data-quality issue rows.
+- Patient and cohort tables now support full-column search, sortable headers, and pagination.
 - Dataset preview exports to CSV.
 - Cohort export generates a CSV.
+- Responsive mobile navigation is enabled with a top-bar menu button and slide-out drawer.
+- Recent activities now navigate to their related app sections.
 - Study report export generates a text report.
 - Header, sidebar, notification, AI assistant, and settings controls now show useful local feedback.
 - Cohort filters are controlled and update the matching record count.
@@ -100,7 +106,7 @@ Invoke-WebRequest http://127.0.0.1:5173
 
 Results:
 
-- Node test suite passed with 16 tests.
+- Node test suite passed with 23 tests.
 - TypeScript check passed.
 - Production Vite build passed.
 - Local frontend server returned HTTP 200.
@@ -121,8 +127,6 @@ Notes:
 - Replace local-only snackbar feedback with persisted workflow states.
 - Add loading, success, empty, and error states for every API-backed operation.
 - Add user-facing validation for unsupported upload formats and malformed files.
-- Add pagination, sorting, and full search for patient/cohort tables.
-- Add responsive mobile navigation because the current sidebar is hidden on small screens.
 
 ### Backend Completion
 
@@ -208,6 +212,7 @@ Current test coverage focuses on the TDD-style business rules that should remain
 - study report text generation
 - shared desktop/mobile navigation configuration
 - recent activity routing to related application sections
+- reusable table filtering, sorting, pagination, and page clamping
 
 Docker option:
 

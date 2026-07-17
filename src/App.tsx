@@ -30,7 +30,9 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
+  TableSortLabel,
   TextField,
   Tooltip,
   Typography,
@@ -89,6 +91,7 @@ import {
 import { clinicalAnalytics } from './clinicalData';
 import { getPageTitle, navItems } from './navigation';
 import { buildStudyReportText, toCsv } from './reporting';
+import { getVisibleRows, SortDirection } from './tableUtils';
 
 const sidebarWidth = 292;
 const enrollmentData = clinicalAnalytics.enrollmentData;
@@ -97,6 +100,8 @@ const diseaseData = clinicalAnalytics.diseaseData;
 const qualityIssues = clinicalAnalytics.qualityIssues;
 const patientRows = clinicalAnalytics.patientRows;
 const cohortRows = clinicalAnalytics.cohortRows;
+type PatientRow = (typeof patientRows)[number];
+type CohortRow = (typeof cohortRows)[number];
 const navIcons: Record<NavKey, ReactNode> = {
   dashboard: <Dashboard />,
   datasets: <Dataset />,
@@ -716,36 +721,114 @@ function DatasetView({
   );
 }
 
-function DataTable({ rows }: { rows: typeof patientRows }) {
+function DataTable({ rows }: { rows: PatientRow[] }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortKey, setSortKey] = useState<keyof PatientRow>('id');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const columns: Array<{ key: keyof PatientRow; label: string }> = [
+    { key: 'id', label: 'PatientID' },
+    { key: 'age', label: 'Age' },
+    { key: 'gender', label: 'Gender' },
+    { key: 'diagnosis', label: 'Diagnosis' },
+    { key: 'bp', label: 'BP (mmHg)' },
+    { key: 'quality', label: 'Quality' },
+  ];
+  const visible = getVisibleRows({
+    rows,
+    searchTerm,
+    sortKey,
+    sortDirection,
+    page,
+    rowsPerPage,
+  });
+
+  const handleSort = (key: keyof PatientRow) => {
+    if (sortKey === key) {
+      setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+    setPage(0);
+  };
+
   return (
-    <Table>
-      <TableHead sx={{ bgcolor: '#f2f4f7' }}>
-        <TableRow>
-          {['PatientID', 'Age', 'Gender', 'Diagnosis', 'BP (mmHg)', 'Quality'].map((head) => (
-            <TableCell key={head} sx={{ fontWeight: 900 }}>{head}</TableCell>
-          ))}
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {rows.map((row, index) => (
-          <TableRow key={`${row.id}-${index}`} sx={{ bgcolor: row.quality === 'Duplicate' ? '#eefcf8' : row.quality === 'Invalid' ? '#fff8f8' : 'inherit' }}>
-            <TableCell>{row.id}</TableCell>
-            <TableCell sx={{ color: row.age > 120 ? 'error.main' : 'inherit', fontWeight: row.age > 120 ? 900 : 500 }}>{row.age}</TableCell>
-            <TableCell>{row.gender}</TableCell>
-            <TableCell>{row.diagnosis}</TableCell>
-            <TableCell sx={{ fontStyle: row.bp === 'Missing' ? 'italic' : 'normal', color: row.bp === 'Missing' ? 'text.secondary' : 'inherit' }}>{row.bp}</TableCell>
-            <TableCell>
-              <Chip
-                size="small"
-                label={row.quality}
-                color={row.quality === 'Clean' ? 'success' : row.quality === 'Invalid' ? 'error' : 'default'}
-                sx={{ fontWeight: 900 }}
-              />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }} justifyContent="space-between" sx={{ px: 2.5, pb: 2 }}>
+        <TextField
+          size="small"
+          value={searchTerm}
+          onChange={(event) => {
+            setSearchTerm(event.target.value);
+            setPage(0);
+          }}
+          placeholder="Search all patient columns"
+          sx={{ minWidth: { sm: 280 } }}
+        />
+        <Typography color="text.secondary">{visible.total} matching row{visible.total === 1 ? '' : 's'}</Typography>
+      </Stack>
+      <Box sx={{ overflowX: 'auto' }}>
+        <Table>
+          <TableHead sx={{ bgcolor: '#f2f4f7' }}>
+            <TableRow>
+              {columns.map((column) => (
+                <TableCell key={column.key} sx={{ fontWeight: 900, whiteSpace: 'nowrap' }}>
+                  <TableSortLabel
+                    active={sortKey === column.key}
+                    direction={sortKey === column.key ? sortDirection : 'asc'}
+                    onClick={() => handleSort(column.key)}
+                  >
+                    {column.label}
+                  </TableSortLabel>
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {visible.visibleRows.map((row, index) => (
+              <TableRow key={`${row.id}-${visible.page}-${index}`} sx={{ bgcolor: row.quality === 'Duplicate' ? '#eefcf8' : row.quality === 'Invalid' ? '#fff8f8' : 'inherit' }}>
+                <TableCell>{row.id}</TableCell>
+                <TableCell sx={{ color: row.age > 120 ? 'error.main' : 'inherit', fontWeight: row.age > 120 ? 900 : 500 }}>{row.age}</TableCell>
+                <TableCell>{row.gender}</TableCell>
+                <TableCell>{row.diagnosis}</TableCell>
+                <TableCell sx={{ fontStyle: row.bp === 'Missing' ? 'italic' : 'normal', color: row.bp === 'Missing' ? 'text.secondary' : 'inherit' }}>{row.bp}</TableCell>
+                <TableCell>
+                  <Chip
+                    size="small"
+                    label={row.quality}
+                    color={row.quality === 'Clean' ? 'success' : row.quality === 'Invalid' ? 'error' : 'default'}
+                    sx={{ fontWeight: 900 }}
+                  />
+                </TableCell>
+              </TableRow>
+            ))}
+            {visible.total === 0 && (
+              <TableRow>
+                <TableCell colSpan={columns.length}>
+                  <Typography color="text.secondary" textAlign="center" sx={{ py: 3 }}>
+                    No patient rows match the current search.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Box>
+      <TablePagination
+        component="div"
+        count={visible.total}
+        page={visible.page}
+        rowsPerPage={rowsPerPage}
+        rowsPerPageOptions={[5, 10, 25]}
+        onPageChange={(_, nextPage) => setPage(nextPage)}
+        onRowsPerPageChange={(event) => {
+          setRowsPerPage(Number(event.target.value));
+          setPage(0);
+        }}
+      />
+    </>
   );
 }
 
@@ -963,48 +1046,119 @@ function CohortDiscoveryView({ onAction }: { onAction: ActionHandler }) {
 }
 
 function CohortTable({ onAction }: { onAction: ActionHandler }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortKey, setSortKey] = useState<keyof CohortRow>('match');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(3);
+  const columns: Array<{ key: keyof CohortRow; label: string }> = [
+    { key: 'id', label: 'Patient ID' },
+    { key: 'ageSex', label: 'Age/Sex' },
+    { key: 'diagnosis', label: 'Diagnosis' },
+    { key: 'bp', label: 'BP (Sys/Dia)' },
+    { key: 'lab', label: 'Last Lab Date' },
+    { key: 'match', label: 'Match' },
+  ];
+  const visible = getVisibleRows({
+    rows: cohortRows,
+    searchTerm,
+    sortKey,
+    sortDirection,
+    page,
+    rowsPerPage,
+  });
+
+  const handleSort = (key: keyof CohortRow) => {
+    if (sortKey === key) {
+      setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+    setPage(0);
+  };
+
   return (
     <Card>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ p: 2.5 }}>
-        <Typography variant="h5">{clinicalAnalytics.cohortMatches.length} matching patients found</Typography>
+      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} spacing={2} sx={{ p: 2.5 }}>
+        <Box>
+          <Typography variant="h5">{visible.total} matching patients found</Typography>
+          <Typography color="text.secondary">Search, sort, and page through the active cohort</Typography>
+        </Box>
         <Stack direction="row">
           <IconButton onClick={() => onAction('Cohort table filter tools opened.') }><FilterList /></IconButton>
           <IconButton onClick={() => onAction('Cohort table switched to structured table view.') }><TableChart /></IconButton>
         </Stack>
       </Stack>
-      <Table>
-        <TableHead sx={{ bgcolor: '#f2f4f7' }}>
-          <TableRow>
-            {['Patient ID', 'Age/Sex', 'Diagnosis', 'BP (Sys/Dia)', 'Last Lab Date', 'Match'].map((head) => <TableCell key={head} sx={{ fontWeight: 900 }}>{head}</TableCell>)}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {cohortRows.map((row) => (
-            <TableRow key={row.id}>
-              <TableCell sx={{ color: 'primary.main', fontWeight: 900 }}>{row.id}</TableCell>
-              <TableCell>{row.ageSex}</TableCell>
-              <TableCell>
-                <Stack direction="row" spacing={0.7} flexWrap="wrap">
-                  {row.diagnosis.map((diagnosis) => <Chip key={diagnosis} size="small" label={diagnosis} color={diagnosis === 'Kidney Disease' ? 'info' : diagnosis === 'Hypertension' ? 'default' : 'error'} />)}
-                </Stack>
-              </TableCell>
-              <TableCell>{row.bp}</TableCell>
-              <TableCell>{row.lab}</TableCell>
-              <TableCell><Chip label={`${row.match}%`} color="primary" sx={{ fontWeight: 900 }} /></TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ p: 2.5 }}>
-        <Typography>Showing 1-{cohortRows.length} of {clinicalAnalytics.cohortMatches.length} patients</Typography>
-        <Stack direction="row" spacing={1}>
-          {[1, 2, 3].map((page) => (
-            <Button key={page} variant={page === 1 ? 'contained' : 'text'} onClick={() => onAction(`Cohort page ${page} selected.`)}>
-              {page}
-            </Button>
-          ))}
-        </Stack>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }} justifyContent="space-between" sx={{ px: 2.5, pb: 2 }}>
+        <TextField
+          size="small"
+          value={searchTerm}
+          onChange={(event) => {
+            setSearchTerm(event.target.value);
+            setPage(0);
+          }}
+          placeholder="Search all cohort columns"
+          sx={{ minWidth: { sm: 300 } }}
+        />
+        <Typography color="text.secondary">Sorted by {columns.find((column) => column.key === sortKey)?.label}</Typography>
       </Stack>
+      <Box sx={{ overflowX: 'auto' }}>
+        <Table>
+          <TableHead sx={{ bgcolor: '#f2f4f7' }}>
+            <TableRow>
+              {columns.map((column) => (
+                <TableCell key={column.key} sx={{ fontWeight: 900, whiteSpace: 'nowrap' }}>
+                  <TableSortLabel
+                    active={sortKey === column.key}
+                    direction={sortKey === column.key ? sortDirection : 'asc'}
+                    onClick={() => handleSort(column.key)}
+                  >
+                    {column.label}
+                  </TableSortLabel>
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {visible.visibleRows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell sx={{ color: 'primary.main', fontWeight: 900 }}>{row.id}</TableCell>
+                <TableCell>{row.ageSex}</TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={0.7} flexWrap="wrap">
+                    {row.diagnosis.map((diagnosis) => <Chip key={diagnosis} size="small" label={diagnosis} color={diagnosis === 'Kidney Disease' ? 'info' : diagnosis === 'Hypertension' ? 'default' : 'error'} />)}
+                  </Stack>
+                </TableCell>
+                <TableCell>{row.bp}</TableCell>
+                <TableCell>{row.lab}</TableCell>
+                <TableCell><Chip label={`${row.match}%`} color="primary" sx={{ fontWeight: 900 }} /></TableCell>
+              </TableRow>
+            ))}
+            {visible.total === 0 && (
+              <TableRow>
+                <TableCell colSpan={columns.length}>
+                  <Typography color="text.secondary" textAlign="center" sx={{ py: 3 }}>
+                    No cohort rows match the current search.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Box>
+      <TablePagination
+        component="div"
+        count={visible.total}
+        page={visible.page}
+        rowsPerPage={rowsPerPage}
+        rowsPerPageOptions={[3, 5, 10]}
+        onPageChange={(_, nextPage) => setPage(nextPage)}
+        onRowsPerPageChange={(event) => {
+          setRowsPerPage(Number(event.target.value));
+          setPage(0);
+        }}
+      />
     </Card>
   );
 }
