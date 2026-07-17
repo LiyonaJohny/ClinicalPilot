@@ -9,6 +9,7 @@ import {
   Checkbox,
   Chip,
   Divider,
+  Drawer,
   Grid,
   IconButton,
   InputBase,
@@ -49,6 +50,7 @@ import {
   Groups,
   Insights,
   LocalHospital,
+  Menu,
   MoreVert,
   NotificationsOutlined,
   Psychology,
@@ -84,6 +86,7 @@ import {
   paperInsights,
 } from './data';
 import { clinicalAnalytics } from './clinicalData';
+import { getPageTitle, navItems } from './navigation';
 import { buildStudyReportText, toCsv } from './reporting';
 
 const sidebarWidth = 292;
@@ -93,6 +96,14 @@ const diseaseData = clinicalAnalytics.diseaseData;
 const qualityIssues = clinicalAnalytics.qualityIssues;
 const patientRows = clinicalAnalytics.patientRows;
 const cohortRows = clinicalAnalytics.cohortRows;
+const navIcons: Record<NavKey, ReactNode> = {
+  dashboard: <Dashboard />,
+  datasets: <Dataset />,
+  papers: <Article />,
+  cohorts: <Groups />,
+  reports: <Analytics />,
+  simulator: <BubbleChart />,
+};
 
 type ActionHandler = (message: string) => void;
 
@@ -114,6 +125,7 @@ function App() {
   const [chatInput, setChatInput] = useState('');
   const [notice, setNotice] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [uploadedDatasetName, setUploadedDatasetName] = useState(clinicalAnalytics.datasetName);
   const [uploadedPaperName, setUploadedPaperName] = useState('NEJM_2023_Cardio_Study_Final.pdf');
   const datasetInputRef = useRef<HTMLInputElement>(null);
@@ -135,18 +147,7 @@ function App() {
     notify('Study report exported.');
   };
 
-  const title = useMemo(
-    () =>
-      ({
-        dashboard: 'Research Dashboard',
-        datasets: `Dataset: ${clinicalAnalytics.datasetName}`,
-        papers: 'Paper Analyzer',
-        cohorts: 'Cohort Discovery',
-        reports: 'Study Report Generator',
-        simulator: 'Digital Twin Simulator',
-      })[active],
-    [active],
-  );
+  const title = useMemo(() => getPageTitle(active, clinicalAnalytics.datasetName), [active]);
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -179,8 +180,36 @@ function App() {
         }}
       />
       <Sidebar active={active} onChange={setActive} onAction={notify} />
+      <Drawer
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          display: { xs: 'block', md: 'none' },
+          '& .MuiDrawer-paper': { width: sidebarWidth, bgcolor: '#eef2f6' },
+        }}
+      >
+        <SidebarContent
+          active={active}
+          onChange={(key) => {
+            setActive(key);
+            setMobileNavOpen(false);
+          }}
+          onAction={(message) => {
+            notify(message);
+            setMobileNavOpen(false);
+          }}
+        />
+      </Drawer>
       <Box sx={{ ml: { md: `${sidebarWidth}px` }, width: '100%', minWidth: 0 }}>
-        <Topbar active={active} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onUploadDataset={requestDatasetUpload} onAction={notify} />
+        <Topbar
+          active={active}
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          onUploadDataset={requestDatasetUpload}
+          onAction={notify}
+          onOpenMobileNav={() => setMobileNavOpen(true)}
+        />
         <Box component="main" sx={{ p: { xs: 2, lg: 4 }, maxWidth: 1500 }}>
           <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
             <Box>
@@ -223,15 +252,6 @@ function App() {
 }
 
 function Sidebar({ active, onChange, onAction }: { active: NavKey; onChange: (key: NavKey) => void; onAction: ActionHandler }) {
-  const items = [
-    { key: 'dashboard' as const, label: 'Research Dashboard', icon: <Dashboard /> },
-    { key: 'datasets' as const, label: 'Datasets', icon: <Dataset /> },
-    { key: 'papers' as const, label: 'Paper Analyzer', icon: <Article /> },
-    { key: 'cohorts' as const, label: 'Cohort Discovery', icon: <Groups /> },
-    { key: 'reports' as const, label: 'Study Reports', icon: <Analytics /> },
-    { key: 'simulator' as const, label: 'Digital Twin', icon: <BubbleChart /> },
-  ];
-
   return (
     <Box
       component="aside"
@@ -247,6 +267,14 @@ function Sidebar({ active, onChange, onAction }: { active: NavKey; onChange: (ke
         zIndex: 10,
       }}
     >
+      <SidebarContent active={active} onChange={onChange} onAction={onAction} />
+    </Box>
+  );
+}
+
+function SidebarContent({ active, onChange, onAction }: { active: NavKey; onChange: (key: NavKey) => void; onAction: ActionHandler }) {
+  return (
+    <Box sx={{ display: 'flex', minHeight: '100%', flexDirection: 'column', p: 2 }}>
       <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 4 }}>
         <Box sx={{ width: 48, height: 48, bgcolor: '#000', color: '#fff', display: 'grid', placeItems: 'center', borderRadius: 1 }}>
           <LocalHospital />
@@ -273,7 +301,7 @@ function Sidebar({ active, onChange, onAction }: { active: NavKey; onChange: (ke
       </Button>
 
       <List sx={{ flex: 1 }}>
-        {items.map((item) => (
+        {navItems.map((item) => (
           <ListItemButton
             key={item.key}
             selected={active === item.key}
@@ -288,7 +316,7 @@ function Sidebar({ active, onChange, onAction }: { active: NavKey; onChange: (ke
               },
             }}
           >
-            <ListItemIcon sx={{ color: 'inherit', minWidth: 42 }}>{item.icon}</ListItemIcon>
+            <ListItemIcon sx={{ color: 'inherit', minWidth: 42 }}>{navIcons[item.key]}</ListItemIcon>
             <ListItemText primary={item.label} primaryTypographyProps={{ fontWeight: 800 }} />
           </ListItemButton>
         ))}
@@ -310,12 +338,14 @@ function Topbar({
   setSearchTerm,
   onUploadDataset,
   onAction,
+  onOpenMobileNav,
 }: {
   active: NavKey;
   searchTerm: string;
   setSearchTerm: (value: string) => void;
   onUploadDataset: () => void;
   onAction: ActionHandler;
+  onOpenMobileNav: () => void;
 }) {
   return (
     <Stack
@@ -325,7 +355,16 @@ function Topbar({
       spacing={2}
       sx={{ height: 72, px: { xs: 2, lg: 4 }, bgcolor: '#fff', borderBottom: '1px solid #d5dae1', position: 'sticky', top: 0, zIndex: 8 }}
     >
-      <Paper sx={{ display: 'flex', alignItems: 'center', px: 2, width: { xs: '100%', md: 430 }, bgcolor: '#f0f2f5' }}>
+      <Tooltip title="Open navigation">
+        <IconButton
+          aria-label="Open navigation"
+          onClick={onOpenMobileNav}
+          sx={{ display: { xs: 'inline-flex', md: 'none' }, flexShrink: 0 }}
+        >
+          <Menu />
+        </IconButton>
+      </Tooltip>
+      <Paper sx={{ display: 'flex', alignItems: 'center', px: 2, width: { xs: '100%', md: 430 }, minWidth: 0, bgcolor: '#f0f2f5' }}>
         <Search sx={{ color: 'text.secondary', mr: 1 }} />
         <InputBase
           fullWidth
