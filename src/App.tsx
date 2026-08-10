@@ -82,6 +82,17 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import {
+  analyzePaper,
+  chatWithDataset,
+  checkProtocol,
+  type CohortDiscoveryResponse,
+  type DatasetProfile,
+  discoverCohort,
+  type PaperAnalysisResponse,
+  profileDataset,
+  type ProtocolCheckResponse,
+} from './api';
 import { getActivityRoute } from './activityRouting';
 import {
   activities,
@@ -134,6 +145,10 @@ function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [uploadedDatasetName, setUploadedDatasetName] = useState(clinicalAnalytics.datasetName);
   const [uploadedPaperName, setUploadedPaperName] = useState('NEJM_2023_Cardio_Study_Final.pdf');
+  const [datasetProfile, setDatasetProfile] = useState<DatasetProfile | null>(null);
+  const [paperAnalysis, setPaperAnalysis] = useState<PaperAnalysisResponse | null>(null);
+  const [cohortDiscovery, setCohortDiscovery] = useState<CohortDiscoveryResponse | null>(null);
+  const [protocolCheck, setProtocolCheck] = useState<ProtocolCheckResponse | null>(null);
   const datasetInputRef = useRef<HTMLInputElement>(null);
   const paperInputRef = useRef<HTMLInputElement>(null);
 
@@ -162,11 +177,18 @@ function App() {
         type="file"
         hidden
         accept=".csv,.xlsx,.xls"
-        onChange={(event) => {
+        onChange={async (event) => {
           const file = event.target.files?.[0];
           if (file) {
             setUploadedDatasetName(file.name);
-            notify(`${file.name} staged for dataset profiling. The packaged demo analytics remain available locally.`);
+            notify(`${file.name} uploading to ClinicalPilot API for profiling...`);
+            try {
+              const profile = await profileDataset(file);
+              setDatasetProfile(profile);
+              notify(`${file.name} profiled by API: ${profile.rows} rows, ${profile.quality_score}% quality score.`);
+            } catch (error) {
+              notify(`Dataset upload staged, but API profiling is unavailable: ${error instanceof Error ? error.message : 'unknown error'}.`);
+            }
           }
           event.target.value = '';
         }}
@@ -176,11 +198,18 @@ function App() {
         type="file"
         hidden
         accept=".pdf,.doc,.docx,.txt"
-        onChange={(event) => {
+        onChange={async (event) => {
           const file = event.target.files?.[0];
           if (file) {
             setUploadedPaperName(file.name);
-            notify(`${file.name} staged for paper insight extraction.`);
+            notify(`${file.name} uploading to ClinicalPilot API for analysis...`);
+            try {
+              const analysis = await analyzePaper(file);
+              setPaperAnalysis(analysis);
+              notify(`${file.name} analyzed by API; insights were refreshed.`);
+            } catch (error) {
+              notify(`Paper upload staged, but API analysis is unavailable: ${error instanceof Error ? error.message : 'unknown error'}.`);
+            }
           }
           event.target.value = '';
         }}
@@ -239,10 +268,18 @@ function App() {
           </Stack>
 
           {active === 'dashboard' && <DashboardView onAction={notify} onNavigate={setActive} />}
-          {active === 'datasets' && <DatasetView chatInput={chatInput} setChatInput={setChatInput} onAction={notify} onExportDataset={exportDataset} />}
-          {active === 'papers' && <PaperAnalyzerView paperName={uploadedPaperName} onUploadPaper={requestPaperUpload} onAction={notify} onExportReport={exportReport} />}
-          {active === 'cohorts' && <CohortDiscoveryView onAction={notify} />}
-          {active === 'reports' && <ReportsView chatInput={chatInput} setChatInput={setChatInput} onAction={notify} onExportReport={exportReport} />}
+          {active === 'datasets' && <DatasetView chatInput={chatInput} setChatInput={setChatInput} onAction={notify} onExportDataset={exportDataset} datasetProfile={datasetProfile} onAskChat={chatWithDataset} />}
+          {active === 'papers' && <PaperAnalyzerView paperName={uploadedPaperName} paperAnalysis={paperAnalysis} onUploadPaper={requestPaperUpload} onAction={notify} onExportReport={exportReport} />}
+          {active === 'cohorts' && <CohortDiscoveryView onAction={notify} cohortDiscovery={cohortDiscovery} protocolCheck={protocolCheck} onDiscoverCohort={async (filters) => {
+            const result = await discoverCohort(filters);
+            setCohortDiscovery(result);
+            return result;
+          }} onCheckProtocol={async (criteria) => {
+            const result = await checkProtocol(criteria);
+            setProtocolCheck(result);
+            return result;
+          }} />}
+          {active === 'reports' && <ReportsView chatInput={chatInput} setChatInput={setChatInput} onAction={notify} onExportReport={exportReport} onAskChat={chatWithDataset} />}
           {active === 'simulator' && <SimulatorView onAction={notify} />}
         </Box>
       </Box>
@@ -649,11 +686,15 @@ function DatasetView({
   setChatInput,
   onAction,
   onExportDataset,
+  datasetProfile,
+  onAskChat,
 }: {
   chatInput: string;
   setChatInput: (value: string) => void;
   onAction: ActionHandler;
   onExportDataset: () => void;
+  datasetProfile: DatasetProfile | null;
+  onAskChat: (question: string) => Promise<{ answer: string; sources: string[] }>;
 }) {
   const [showIssuesOnly, setShowIssuesOnly] = useState(false);
   const visibleRows = showIssuesOnly ? patientRows.filter((row) => row.quality !== 'Clean') : patientRows;
@@ -674,6 +715,11 @@ function DatasetView({
             </Grid>
           ))}
         </Grid>
+        {datasetProfile && (
+          <Alert severity="success" sx={{ mb: 3 }}>
+            API profile complete: {datasetProfile.rows} rows, {datasetProfile.columns.length} columns, {datasetProfile.duplicate_records} duplicates, {datasetProfile.invalid_ages} invalid age entries, {datasetProfile.quality_score}% quality score.
+          </Alert>
+        )}
 
         <Card sx={{ mb: 3 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ p: 2.5 }}>
@@ -715,7 +761,7 @@ function DatasetView({
         </Card>
       </Grid>
       <Grid item xs={12} xl={4}>
-        <AssistantPanel chatInput={chatInput} setChatInput={setChatInput} context="dataset" onAction={onAction} />
+        <AssistantPanel chatInput={chatInput} setChatInput={setChatInput} context="dataset" onAction={onAction} onAskChat={onAskChat} />
       </Grid>
     </Grid>
   );
@@ -834,15 +880,27 @@ function DataTable({ rows }: { rows: PatientRow[] }) {
 
 function PaperAnalyzerView({
   paperName,
+  paperAnalysis,
   onUploadPaper,
   onAction,
   onExportReport,
 }: {
   paperName: string;
+  paperAnalysis: PaperAnalysisResponse | null;
   onUploadPaper: () => void;
   onAction: ActionHandler;
   onExportReport: () => void;
 }) {
+  const insightCards = paperAnalysis
+    ? [
+        { title: 'Study Objective', body: paperAnalysis.study_objective, tone: 'primary' },
+        { title: 'Population', body: paperAnalysis.population, tone: 'default' },
+        { title: 'Methods', body: paperAnalysis.methods, tone: 'default' },
+        { title: 'Key Results', body: paperAnalysis.results, tone: 'success' },
+        { title: 'Limitations', body: paperAnalysis.limitations, tone: 'danger' },
+      ]
+    : paperInsights;
+
   return (
     <Grid container spacing={3}>
       <Grid item xs={12} lg={7}>
@@ -904,7 +962,7 @@ function PaperAnalyzerView({
               <Typography variant="h5">AI Insights Extraction</Typography>
             </Stack>
             <Stack spacing={2}>
-              {paperInsights.map((insight) => (
+              {insightCards.map((insight) => (
                 <Paper
                   key={insight.title}
                   variant="outlined"
@@ -932,11 +990,24 @@ function SkeletonLine({ width, highlight = false }: { width: string; highlight?:
   return <Box sx={{ height: 16, width, mb: 2, bgcolor: highlight ? '#c8fff5' : '#edf0f3' }} />;
 }
 
-function CohortDiscoveryView({ onAction }: { onAction: ActionHandler }) {
+function CohortDiscoveryView({
+  onAction,
+  cohortDiscovery,
+  protocolCheck,
+  onDiscoverCohort,
+  onCheckProtocol,
+}: {
+  onAction: ActionHandler;
+  cohortDiscovery: CohortDiscoveryResponse | null;
+  protocolCheck: ProtocolCheckResponse | null;
+  onDiscoverCohort: (filters: Record<string, unknown>) => Promise<CohortDiscoveryResponse>;
+  onCheckProtocol: (criteria: string) => Promise<ProtocolCheckResponse>;
+}) {
   const [minimumAge, setMinimumAge] = useState(60);
   const [maximumAge, setMaximumAge] = useState(95);
   const [minimumSystolic, setMinimumSystolic] = useState(140);
   const [selectedComorbidities, setSelectedComorbidities] = useState(['Diabetes Type 2']);
+  const [criteria, setCriteria] = useState('e.g. Adult patients aged 18-65 with documented Type 2 Diabetes for at least 12 months. Exclusion: History of severe renal impairment (eGFR < 30).');
   const activeFilterCount = 2 + selectedComorbidities.length;
   const adjustedMatches = Math.max(
     0,
@@ -944,6 +1015,29 @@ function CohortDiscoveryView({ onAction }: { onAction: ActionHandler }) {
       Math.max(0, selectedComorbidities.length - 1),
   );
   const adjustedShare = Number(((adjustedMatches / clinicalAnalytics.totalPatients) * 100).toFixed(2));
+  const displayedMatches = cohortDiscovery?.matching_patients ?? adjustedMatches;
+  const displayedShare = cohortDiscovery?.population_share ?? adjustedShare;
+  const applyCohortFilters = async () => {
+    try {
+      const result = await onDiscoverCohort({
+        minimum_age: minimumAge,
+        maximum_age: maximumAge,
+        minimum_systolic_bp: minimumSystolic,
+        comorbidities: selectedComorbidities,
+      });
+      onAction(`API cohort discovery complete: ${result.matching_patients} patients matched.`);
+    } catch (error) {
+      onAction(`Cohort API unavailable: ${error instanceof Error ? error.message : 'unknown error'}. Local cohort estimate remains visible.`);
+    }
+  };
+  const analyzeProtocol = async () => {
+    try {
+      const result = await onCheckProtocol(criteria);
+      onAction(`API protocol check complete: ${result.eligible_patients} eligible patients identified.`);
+    } catch (error) {
+      onAction(`Protocol API unavailable: ${error instanceof Error ? error.message : 'unknown error'}. Local eligibility estimate remains visible.`);
+    }
+  };
 
   return (
     <Grid container spacing={3}>
@@ -987,15 +1081,16 @@ function CohortDiscoveryView({ onAction }: { onAction: ActionHandler }) {
             ))}
             <Typography fontWeight={800} sx={{ mt: 2 }}>Blood Pressure (Systolic)</Typography>
             <Slider value={minimumSystolic} min={90} max={190} valueLabelDisplay="auto" onChange={(_, value) => setMinimumSystolic(value as number)} />
-            <Button fullWidth variant="outlined" color="secondary" onClick={() => onAction(`${adjustedMatches} patients match ${activeFilterCount} active cohort filters.`)}>
+            <Button fullWidth variant="outlined" color="secondary" onClick={applyCohortFilters}>
               Apply {activeFilterCount} Filters
             </Button>
           </CardContent>
         </Card>
         <Alert icon={<Analytics />} severity="success" sx={{ bgcolor: '#e0fbf7' }}>
           <Typography fontWeight={900}>Cohort Analysis</Typography>
-          <Stack direction="row" justifyContent="space-between"><span>Matching Records</span><b>{adjustedMatches}</b></Stack>
-          <Stack direction="row" justifyContent="space-between"><span>Population Share</span><b>{adjustedShare}%</b></Stack>
+          <Stack direction="row" justifyContent="space-between"><span>Matching Records</span><b>{displayedMatches}</b></Stack>
+          <Stack direction="row" justifyContent="space-between"><span>Population Share</span><b>{displayedShare}%</b></Stack>
+          {cohortDiscovery && <Typography variant="body2" sx={{ mt: 1 }}>API characteristics: {cohortDiscovery.top_characteristics.join(', ')}</Typography>}
         </Alert>
       </Grid>
       <Grid item xs={12} lg={9}>
@@ -1015,7 +1110,8 @@ function CohortDiscoveryView({ onAction }: { onAction: ActionHandler }) {
                   fullWidth
                   multiline
                   minRows={7}
-                  defaultValue="e.g. Adult patients aged 18-65 with documented Type 2 Diabetes for at least 12 months. Exclusion: History of severe renal impairment (eGFR < 30)."
+                  value={criteria}
+                  onChange={(event) => setCriteria(event.target.value)}
                 />
               </Grid>
               <Grid item xs={12} md={5}>
@@ -1024,14 +1120,15 @@ function CohortDiscoveryView({ onAction }: { onAction: ActionHandler }) {
                   <Stack direction="row" justifyContent="space-between" sx={{ mt: 2 }}>
                     <Box>
                       <Typography>Eligible Patients</Typography>
-                      <Typography variant="h3" color="primary">{clinicalAnalytics.protocolEligibleCount}</Typography>
+                      <Typography variant="h3" color="primary">{protocolCheck?.eligible_patients ?? clinicalAnalytics.protocolEligibleCount}</Typography>
                     </Box>
                     <Groups sx={{ fontSize: 48, color: '#b7d8d5' }} />
                   </Stack>
                   <Divider sx={{ my: 2 }} />
                   <Typography>Ineligible Patients</Typography>
-                  <Typography variant="h3" color="text.secondary">{clinicalAnalytics.protocolIneligibleCount}</Typography>
-                  <Button fullWidth variant="contained" color="secondary" sx={{ mt: 2 }} onClick={() => onAction(`${clinicalAnalytics.protocolEligibleCount} protocol-eligible patients identified; exclusions include kidney disease and age outside range.`)}>
+                  <Typography variant="h3" color="text.secondary">{protocolCheck?.ineligible_patients ?? clinicalAnalytics.protocolIneligibleCount}</Typography>
+                  {protocolCheck && <Typography variant="body2" color="text.secondary">Reasons: {protocolCheck.major_exclusion_reasons.join(', ')}</Typography>}
+                  <Button fullWidth variant="contained" color="secondary" sx={{ mt: 2 }} onClick={analyzeProtocol}>
                     Analyze Details
                   </Button>
                 </Paper>
@@ -1168,11 +1265,13 @@ function ReportsView({
   setChatInput,
   onAction,
   onExportReport,
+  onAskChat,
 }: {
   chatInput: string;
   setChatInput: (value: string) => void;
   onAction: ActionHandler;
   onExportReport: () => void;
+  onAskChat: (question: string) => Promise<{ answer: string; sources: string[] }>;
 }) {
   const [reportTitle, setReportTitle] = useState('Hypertension Efficacy Analysis Q3');
   const [reportType, setReportType] = useState('Detailed Analysis');
@@ -1272,7 +1371,7 @@ function ReportsView({
         </Card>
       </Grid>
       <Grid item xs={12} lg={3}>
-        <AssistantPanel chatInput={chatInput} setChatInput={setChatInput} context="report" onAction={onAction} />
+        <AssistantPanel chatInput={chatInput} setChatInput={setChatInput} context="report" onAction={onAction} onAskChat={onAskChat} />
       </Grid>
     </Grid>
   );
@@ -1283,26 +1382,34 @@ function AssistantPanel({
   setChatInput,
   context,
   onAction,
+  onAskChat,
 }: {
   chatInput: string;
   setChatInput: (value: string) => void;
   context: 'dataset' | 'report';
   onAction: ActionHandler;
+  onAskChat: (question: string) => Promise<{ answer: string; sources: string[] }>;
 }) {
   const [messages, setMessages] = useState<string[]>([]);
-  const sendMessage = () => {
+  const sendMessage = async () => {
     const question = chatInput.trim();
     if (!question) {
       onAction('Enter a question for Pilot AI first.');
       return;
     }
-    const answer =
-      context === 'dataset'
-        ? `${clinicalAnalytics.diabeticHypertensionPercent}% of diabetic patients also have hypertension; ${clinicalAnalytics.missingBpCount} BP records still need review.`
-        : `The active draft uses ${clinicalAnalytics.totalPatients} unique patients, a ${clinicalAnalytics.qualityScore}% quality score, and ${clinicalAnalytics.treatmentEffectiveness}% Compound-X controlled outcomes.`;
+    let answer =
+        context === 'dataset'
+          ? `${clinicalAnalytics.diabeticHypertensionPercent}% of diabetic patients also have hypertension; ${clinicalAnalytics.missingBpCount} BP records still need review.`
+          : `The active draft uses ${clinicalAnalytics.totalPatients} unique patients, a ${clinicalAnalytics.qualityScore}% quality score, and ${clinicalAnalytics.treatmentEffectiveness}% Compound-X controlled outcomes.`;
+    try {
+      const response = await onAskChat(question);
+      answer = `${response.answer}${response.sources.length ? ` Sources: ${response.sources.join(', ')}` : ''}`;
+      onAction('Pilot AI answered from the ClinicalPilot API.');
+    } catch (error) {
+      onAction(`Chat API unavailable: ${error instanceof Error ? error.message : 'unknown error'}. Showing local fallback answer.`);
+    }
     setMessages((current) => [`Q: ${question}`, `A: ${answer}`, ...current].slice(0, 6));
     setChatInput('');
-    onAction('Pilot AI generated a local clinical-data answer.');
   };
 
   return (
@@ -1350,11 +1457,11 @@ function AssistantPanel({
             value={chatInput}
             onChange={(event) => setChatInput(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') sendMessage();
+              if (event.key === 'Enter') void sendMessage();
             }}
             placeholder="Ask ClinicalPilot AI..."
           />
-          <IconButton color="primary" onClick={sendMessage}><Send /></IconButton>
+          <IconButton color="primary" onClick={() => void sendMessage()}><Send /></IconButton>
         </Paper>
       </CardContent>
     </Card>

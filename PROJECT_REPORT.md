@@ -1,12 +1,12 @@
 # ClinicalPilot AI - Project Report
 
-Status date: July 16, 2026
+Status date: August 10, 2026
 
 ## 1. Executive Summary
 
 ClinicalPilot AI is a clinical research web application for dataset quality review, cohort discovery, clinical paper insight extraction, study report generation, and digital twin-style operational simulation.
 
-The project currently contains a working React + TypeScript frontend, a FastAPI backend scaffold, sample cardiovascular clinical data, Docker configuration, and a production build pipeline. The frontend has been updated so the visible demo controls are interactive locally: upload controls open file selection, exports generate downloadable files, filters update cohort/data views, the assistant can answer local dataset/report questions, reports can be configured, and simulator sliders recalculate projected outcomes.
+The project currently contains a working React + TypeScript frontend, a FastAPI backend scaffold, sample cardiovascular clinical data, Docker configuration, and a production build pipeline. The frontend now has typed API-client integration for dataset upload/profiling, cohort discovery, protocol checks, paper analysis, and dataset chat, with local fallback feedback when the backend is unavailable.
 
 The application is running locally at:
 
@@ -25,6 +25,7 @@ http://127.0.0.1:5173
 ## 3. Repository Structure
 
 - `src/App.tsx`: Main application UI and interactive workflows
+- `src/api.ts`: Typed frontend client for the FastAPI backend endpoints
 - `src/activityRouting.ts`: Recent activity navigation targets and feedback messages
 - `src/clinicalData.ts`: Packaged clinical demo records and computed analytics
 - `src/data.ts`: Navigation types, activity items, and paper insight demo content
@@ -37,6 +38,7 @@ http://127.0.0.1:5173
 - `sample_data/cardiovascular_phase_ii.csv`: Demo cardiovascular clinical dataset
 - `docker-compose.yml`: Frontend, API, and PostgreSQL service configuration
 - `README.md`: Existing setup and feature overview
+- `tests/api.test.ts`: Mocked frontend/API contract tests
 
 ## 4. Work Already Done
 
@@ -54,7 +56,8 @@ http://127.0.0.1:5173
 ### Functionality Enabled in This Pass
 
 - Dataset upload buttons now open a file picker and stage selected files locally.
-- Paper upload area now opens a file picker and updates the displayed paper name.
+- Dataset upload now posts files to `POST /datasets/profile` and displays returned profile metrics.
+- Paper upload area now opens a file picker, posts files to `POST /papers/analyze`, and refreshes insight cards from the API response.
 - Dataset table filter toggles between all rows and data-quality issue rows.
 - Patient and cohort tables now support full-column search, sortable headers, and pagination.
 - Dataset preview exports to CSV.
@@ -63,10 +66,10 @@ http://127.0.0.1:5173
 - Recent activities now navigate to their related app sections.
 - Study report export generates a text report.
 - Header, sidebar, notification, AI assistant, and settings controls now show useful local feedback.
-- Cohort filters are controlled and update the matching record count.
-- Protocol analysis button gives eligibility feedback.
+- Cohort filters are controlled and call `POST /cohorts/discover`.
+- Protocol analysis calls `POST /protocols/check` and displays API eligibility results.
 - Report title, report type, and AI insight toggle are editable.
-- AI assistant accepts questions and returns local clinical-data answers.
+- AI assistant accepts questions through `POST /chat` and falls back to local clinical-data answers when the API is unavailable.
 - Simulator sliders are controlled and recalculate staffing, completion, and capacity risk after running a scenario.
 
 ### Backend/API
@@ -93,6 +96,15 @@ Implemented backend data-quality logic:
 - Cohort filtering
 - Protocol eligibility calculation
 
+Implemented frontend/API integration:
+
+- `profileDataset`: posts uploaded CSV/XLS/XLSX files to `/datasets/profile`
+- `analyzePaper`: posts uploaded paper files to `/papers/analyze`
+- `discoverCohort`: posts cohort filters to `/cohorts/discover`
+- `checkProtocol`: posts criteria text to `/protocols/check`
+- `chatWithDataset`: posts dataset questions to `/chat`
+- Default API base URL is `http://127.0.0.1:8000` and can be overridden with `VITE_API_BASE_URL`
+
 ## 5. Current Verification
 
 Completed checks:
@@ -106,7 +118,7 @@ Invoke-WebRequest http://127.0.0.1:5173
 
 Results:
 
-- Node test suite passed with 23 tests.
+- Node test suite passed with 28 tests.
 - TypeScript check passed.
 - Production Vite build passed.
 - Local frontend server returned HTTP 200.
@@ -123,7 +135,6 @@ Notes:
 
 ### Production Frontend Integration
 
-- Connect frontend upload, profiling, cohort, protocol, paper-analysis, and chat actions to the FastAPI backend.
 - Replace local-only snackbar feedback with persisted workflow states.
 - Add loading, success, empty, and error states for every API-backed operation.
 - Add user-facing validation for unsupported upload formats and malformed files.
@@ -160,10 +171,10 @@ Notes:
 
 ## 7. Recommended Next Milestones
 
-1. Backend setup and API verification: install dependencies, start FastAPI, confirm all endpoints.
-2. Frontend/API integration: wire dataset profile, cohort discovery, protocol check, paper upload, and chat to backend endpoints.
-3. Persistence: save uploaded datasets, generated reports, cohorts, and analysis history in PostgreSQL.
-4. Testing: add automated tests for the critical clinical workflows.
+1. Backend setup and API verification: install dependencies, start FastAPI, confirm all endpoints locally.
+2. Persistence: save uploaded datasets, generated reports, cohorts, and analysis history in PostgreSQL.
+3. API state hardening: add durable loading, success, empty, and error workflows around backend calls.
+4. Testing: add backend tests and end-to-end tests for the critical clinical workflows.
 5. Compliance hardening: authentication, audit logs, data privacy controls, and clinical review flow.
 6. Deployment readiness: Docker Compose verification, CI, environment configuration, and production build documentation.
 
@@ -213,6 +224,7 @@ Current test coverage focuses on the TDD-style business rules that should remain
 - shared desktop/mobile navigation configuration
 - recent activity routing to related application sections
 - reusable table filtering, sorting, pagination, and page clamping
+- mocked FastAPI client contracts for upload/profile, paper analysis, cohort discovery, protocol checks, chat, and non-2xx errors
 
 Docker option:
 
@@ -222,6 +234,6 @@ docker compose up --build
 
 ## 9. Overall Project Status
 
-Current status: functional local frontend demo with enabled interactive controls, successful TypeScript/build verification, and a backend scaffold ready for dependency setup and integration.
+Current status: functional local frontend with enabled interactive controls, typed FastAPI client integration, mocked API contract tests, successful TypeScript/build verification, and a backend scaffold ready for local dependency setup.
 
-Main remaining gap: converting the locally interactive demo into a fully API-connected, persisted, tested, and compliant clinical research platform.
+Main remaining gap: running and hardening the backend service locally, then adding persistence, production-grade API states, backend/e2e tests, and clinical compliance controls.
