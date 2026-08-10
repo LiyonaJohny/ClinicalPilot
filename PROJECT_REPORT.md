@@ -17,8 +17,8 @@ http://127.0.0.1:5173
 ## 2. Current Technology Stack
 
 - Frontend: React 18, TypeScript, Vite, Material UI, Recharts, TanStack React Query
-- Backend: FastAPI, Pandas, NumPy, Scikit-Learn, python-multipart
-- AI/RAG dependencies declared: OpenAI, LangChain, ChromaDB
+- Backend: FastAPI, Pandas, NumPy, Scikit-Learn, python-multipart, HTTPX
+- Optional AI/RAG dependencies: OpenAI, LangChain, ChromaDB in `backend/requirements-ai.txt`
 - Deployment assets: Dockerfile for frontend, backend Dockerfile, Docker Compose with PostgreSQL
 - Dataset: `sample_data/cardiovascular_phase_ii.csv`
 
@@ -35,6 +35,10 @@ http://127.0.0.1:5173
 - `src/styles.css`: Global styles
 - `backend/app/main.py`: FastAPI app and API endpoints
 - `backend/app/quality.py`: Dataset profiling, cohort discovery, and protocol evaluation logic
+- `backend/requirements.txt`: Core backend runtime and test dependencies
+- `backend/requirements-ai.txt`: Optional AI/RAG dependencies separated from core runtime
+- `backend/tests/test_api.py`: FastAPI endpoint tests
+- `backend/tests/test_quality.py`: Dataset quality engine tests
 - `sample_data/cardiovascular_phase_ii.csv`: Demo cardiovascular clinical dataset
 - `docker-compose.yml`: Frontend, API, and PostgreSQL service configuration
 - `README.md`: Existing setup and feature overview
@@ -95,6 +99,16 @@ Implemented backend data-quality logic:
 - Recommended cleaning actions
 - Cohort filtering
 - Protocol eligibility calculation
+- Chat percentage calculation now uses unique `PatientID` records to match frontend analytics.
+
+Completed backend setup and local API verification:
+
+- Created `.venv` using the bundled Python runtime.
+- Installed core backend dependencies from `backend/requirements.txt`.
+- Started FastAPI locally with Uvicorn at `http://127.0.0.1:8000`.
+- Verified all implemented API routes over HTTP.
+- Added backend test suite with 11 passing tests.
+- Moved ChromaDB/LangChain/OpenAI into `backend/requirements-ai.txt` because ChromaDB's native `chroma-hnswlib` dependency requires Microsoft C++ Build Tools on this machine and is not used by the current API routes.
 
 Implemented frontend/API integration:
 
@@ -111,24 +125,29 @@ Completed checks:
 
 ```text
 npm test
+npm run backend:test
 npm exec tsc -- --noEmit
 npm run build
 Invoke-WebRequest http://127.0.0.1:5173
+HTTP checks against http://127.0.0.1:8000
 ```
 
 Results:
 
 - Node test suite passed with 28 tests.
+- Backend Python test suite passed with 11 tests.
 - TypeScript check passed.
 - Production Vite build passed.
 - Local frontend server returned HTTP 200.
 - Local frontend is running at `http://127.0.0.1:5173`.
+- Local FastAPI server is running at `http://127.0.0.1:8000`.
+- Verified `GET /health`, `GET /datasets`, `GET /datasets/demo-profile`, `POST /datasets/profile`, `POST /cohorts/discover`, `POST /protocols/check`, `POST /papers/analyze`, and `POST /chat`.
 
 Notes:
 
 - Vite needed to run outside the Codex sandbox because the sandbox blocked Vite/esbuild from loading `vite.config.ts`.
-- Python is not installed as a normal system command in this environment.
-- The bundled Python runtime does not currently include FastAPI dependencies, so the backend was not started locally in this pass.
+- Python is still not installed as a normal system command in this environment, so backend commands use `.venv\Scripts\python.exe`.
+- Optional AI/RAG dependencies were not installed because ChromaDB needs native Windows build tools; the current backend API does not require those packages.
 - A Playwright visual smoke test was attempted but blocked by a local permission error accessing the Codex app data directory.
 
 ## 6. What Is Yet To Be Done
@@ -141,9 +160,6 @@ Notes:
 
 ### Backend Completion
 
-- Install and verify backend Python dependencies.
-- Run the FastAPI API locally at `http://127.0.0.1:8000`.
-- Add automated backend tests for profiling, cohort discovery, protocol checks, paper analysis, and chat.
 - Add stronger validation with Pydantic request/response models.
 - Add safer handling for missing columns and invalid uploaded files.
 - Add persistent storage using the PostgreSQL service already declared in Docker Compose.
@@ -171,10 +187,10 @@ Notes:
 
 ## 7. Recommended Next Milestones
 
-1. Backend setup and API verification: install dependencies, start FastAPI, confirm all endpoints locally.
-2. Persistence: save uploaded datasets, generated reports, cohorts, and analysis history in PostgreSQL.
+1. Persistence: save uploaded datasets, generated reports, cohorts, and analysis history in PostgreSQL.
+2. API schema hardening: add Pydantic request/response models and invalid-file/missing-column handling.
 3. API state hardening: add durable loading, success, empty, and error workflows around backend calls.
-4. Testing: add backend tests and end-to-end tests for the critical clinical workflows.
+4. Testing: add end-to-end tests for the critical clinical workflows.
 5. Compliance hardening: authentication, audit logs, data privacy controls, and clinical review flow.
 6. Deployment readiness: Docker Compose verification, CI, environment configuration, and production build documentation.
 
@@ -211,6 +227,7 @@ Tests:
 
 ```bash
 npm test
+npm run backend:test
 ```
 
 Current test coverage focuses on the TDD-style business rules that should remain stable:
@@ -225,6 +242,8 @@ Current test coverage focuses on the TDD-style business rules that should remain
 - recent activity routing to related application sections
 - reusable table filtering, sorting, pagination, and page clamping
 - mocked FastAPI client contracts for upload/profile, paper analysis, cohort discovery, protocol checks, chat, and non-2xx errors
+- backend FastAPI endpoint tests for every implemented route
+- backend quality-engine tests for profiling, cohort discovery, and protocol evaluation
 
 Docker option:
 

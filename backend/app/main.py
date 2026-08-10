@@ -81,6 +81,8 @@ async def analyze_paper(file: UploadFile = File(...)) -> dict:
 def chat_with_dataset(payload: dict) -> dict:
     question = payload.get("question", "")
     frame = load_sample_dataset()
+    if "PatientID" in frame.columns:
+        frame = frame.drop_duplicates(subset=["PatientID"], keep="first")
     diabetic = frame[frame["DiabetesType2"] == True]
     overlap = diabetic[diabetic["Hypertension"] == True]
     percent = round((len(overlap) / len(diabetic)) * 100) if len(diabetic) else 0
