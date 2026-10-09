@@ -4,3 +4,12 @@ backend/.env
 
 # Local embedding model downloaded by fastembed
 backend/.model_cache/
+
+# Installed dependencies and generated files
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+
+# Local SQLite database
+backend/clinicalpilot.db
