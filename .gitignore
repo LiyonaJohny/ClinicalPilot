@@ -1,0 +1,6 @@
+# Secrets
+.env
+backend/.env
+
+# Local embedding model downloaded by fastembed
+backend/.model_cache/

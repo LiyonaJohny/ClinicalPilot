@@ -17,7 +17,7 @@ http://127.0.0.1:5173
 ## 2. Current Technology Stack
 
 - Frontend: React 18, TypeScript, Vite, Material UI, Recharts, TanStack React Query
-- Backend: FastAPI, Pandas, NumPy, Scikit-Learn, python-multipart, HTTPX
+- Backend: FastAPI, Pandas, NumPy, Scikit-Learn, python-multipart, HTTPX, SQLAlchemy, psycopg
 - Optional AI/RAG dependencies: OpenAI, LangChain, ChromaDB in `backend/requirements-ai.txt`
 - Deployment assets: Dockerfile for frontend, backend Dockerfile, Docker Compose with PostgreSQL
 - Dataset: `sample_data/cardiovascular_phase_ii.csv`
@@ -34,6 +34,7 @@ http://127.0.0.1:5173
 - `src/theme.ts`: Material UI theme
 - `src/styles.css`: Global styles
 - `backend/app/main.py`: FastAPI app and API endpoints
+- `backend/app/persistence.py`: SQLAlchemy persistence models and save helpers for datasets, reports, cohorts, and analysis history
 - `backend/app/quality.py`: Dataset profiling, cohort discovery, and protocol evaluation logic
 - `backend/requirements.txt`: Core backend runtime and test dependencies
 - `backend/requirements-ai.txt`: Optional AI/RAG dependencies separated from core runtime
@@ -88,6 +89,8 @@ Implemented FastAPI endpoints:
 - `POST /protocols/check`: Evaluates protocol criteria against sample data
 - `POST /papers/analyze`: Returns structured paper-analysis fields for uploaded documents
 - `POST /chat`: Answers a dataset question using packaged sample data
+- `POST /reports`: Persists generated report content and metadata
+- `GET /storage/summary`: Reports persisted record counts for datasets, reports, cohorts, and analysis history
 
 Implemented backend data-quality logic:
 
@@ -109,6 +112,19 @@ Completed backend setup and local API verification:
 - Verified all implemented API routes over HTTP.
 - Added backend test suite with 11 passing tests.
 - Moved ChromaDB/LangChain/OpenAI into `backend/requirements-ai.txt` because ChromaDB's native `chroma-hnswlib` dependency requires Microsoft C++ Build Tools on this machine and is not used by the current API routes.
+
+Implemented persistence:
+
+- Added SQLAlchemy models for uploaded dataset profiles, generated reports, cohort discovery results, and analysis history.
+- Docker/production persistence uses PostgreSQL through `DATABASE_URL`; the existing Docker Compose file provides `postgresql://clinicalpilot:clinicalpilot@db:5432/clinicalpilot`.
+- The backend normalizes PostgreSQL URLs to the psycopg SQLAlchemy driver.
+- Standalone local runs without `DATABASE_URL` use a local SQLite database file so the API remains runnable on machines without Docker.
+- Backend tests use isolated SQLite databases through the same SQLAlchemy persistence code path.
+- Dataset profile uploads persist a dataset record and analysis-history record.
+- Cohort discovery persists a cohort record and analysis-history record.
+- Protocol checks, paper analysis, and chat persist analysis-history records.
+- Generated reports persist report content, metadata, and analysis-history records.
+- Live local API verification created 1 dataset record, 1 generated report, 1 cohort record, and 6 analysis-history records.
 
 Implemented frontend/API integration:
 
@@ -134,20 +150,21 @@ HTTP checks against http://127.0.0.1:8000
 
 Results:
 
-- Node test suite passed with 28 tests.
-- Backend Python test suite passed with 11 tests.
+- Node test suite passed with 29 tests.
+- Backend Python test suite passed with 13 tests.
 - TypeScript check passed.
 - Production Vite build passed.
 - Local frontend server returned HTTP 200.
 - Local frontend is running at `http://127.0.0.1:5173`.
 - Local FastAPI server is running at `http://127.0.0.1:8000`.
-- Verified `GET /health`, `GET /datasets`, `GET /datasets/demo-profile`, `POST /datasets/profile`, `POST /cohorts/discover`, `POST /protocols/check`, `POST /papers/analyze`, and `POST /chat`.
+- Verified `GET /health`, `GET /datasets`, `GET /datasets/demo-profile`, `POST /datasets/profile`, `POST /cohorts/discover`, `POST /protocols/check`, `POST /papers/analyze`, `POST /chat`, `POST /reports`, and `GET /storage/summary`.
 
 Notes:
 
 - Vite needed to run outside the Codex sandbox because the sandbox blocked Vite/esbuild from loading `vite.config.ts`.
 - Python is still not installed as a normal system command in this environment, so backend commands use `.venv\Scripts\python.exe`.
 - Optional AI/RAG dependencies were not installed because ChromaDB needs native Windows build tools; the current backend API does not require those packages.
+- Docker is not installed on this machine, so PostgreSQL container verification could not be run locally; PostgreSQL is wired through Docker Compose and `DATABASE_URL`.
 - A Playwright visual smoke test was attempted but blocked by a local permission error accessing the Codex app data directory.
 
 ## 6. What Is Yet To Be Done
@@ -162,7 +179,6 @@ Notes:
 
 - Add stronger validation with Pydantic request/response models.
 - Add safer handling for missing columns and invalid uploaded files.
-- Add persistent storage using the PostgreSQL service already declared in Docker Compose.
 - Implement real document/PDF parsing for paper analysis.
 - Implement real OpenAI/LangChain/ChromaDB RAG flows or remove unused dependencies if not planned.
 
@@ -187,12 +203,12 @@ Notes:
 
 ## 7. Recommended Next Milestones
 
-1. Persistence: save uploaded datasets, generated reports, cohorts, and analysis history in PostgreSQL.
-2. API schema hardening: add Pydantic request/response models and invalid-file/missing-column handling.
-3. API state hardening: add durable loading, success, empty, and error workflows around backend calls.
-4. Testing: add end-to-end tests for the critical clinical workflows.
-5. Compliance hardening: authentication, audit logs, data privacy controls, and clinical review flow.
-6. Deployment readiness: Docker Compose verification, CI, environment configuration, and production build documentation.
+1. API schema hardening: add Pydantic request/response models and invalid-file/missing-column handling.
+2. API state hardening: add durable loading, success, empty, and error workflows around backend calls.
+3. Testing: add end-to-end tests for the critical clinical workflows.
+4. Compliance hardening: authentication, audit logs, data privacy controls, and clinical review flow.
+5. Deployment readiness: Docker Compose verification, CI, environment configuration, and production build documentation.
+6. AI/RAG enablement: install optional AI dependencies on a machine with Windows C++ Build Tools or use compatible prebuilt wheels.
 
 ## 8. Local Run Instructions
 
@@ -212,9 +228,9 @@ http://127.0.0.1:5173
 Backend, once Python and dependencies are available:
 
 ```bash
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
 Expected API:
@@ -242,7 +258,9 @@ Current test coverage focuses on the TDD-style business rules that should remain
 - recent activity routing to related application sections
 - reusable table filtering, sorting, pagination, and page clamping
 - mocked FastAPI client contracts for upload/profile, paper analysis, cohort discovery, protocol checks, chat, and non-2xx errors
+- mocked FastAPI client contract for report persistence
 - backend FastAPI endpoint tests for every implemented route
+- backend persistence assertions for dataset profiles, generated reports, cohorts, and analysis history
 - backend quality-engine tests for profiling, cohort discovery, and protocol evaluation
 
 Docker option:
@@ -253,6 +271,35 @@ docker compose up --build
 
 ## 9. Overall Project Status
 
-Current status: functional local frontend with enabled interactive controls, typed FastAPI client integration, mocked API contract tests, successful TypeScript/build verification, and a backend scaffold ready for local dependency setup.
+Current status: functional local frontend with enabled interactive controls, typed FastAPI client integration, SQLAlchemy persistence wired for PostgreSQL through `DATABASE_URL`, mocked API contract tests, backend endpoint/persistence tests, and successful TypeScript/build verification.
 
-Main remaining gap: running and hardening the backend service locally, then adding persistence, production-grade API states, backend/e2e tests, and clinical compliance controls.
+Main remaining gap: hardening API schemas and error states, verifying Docker Compose/PostgreSQL on a machine with Docker installed, then adding end-to-end tests and clinical compliance controls.
+
+## 10. AI Upgrade: Clinical Ingestion, RAG, Tool Calling, Streaming, Evals (2026-10-08)
+
+This pass replaces the placeholder AI endpoints with working ones. It supersedes the earlier notes about optional OpenAI, LangChain and ChromaDB dependencies: the AI layer now uses the Anthropic SDK, local `fastembed` embeddings and `pgvector`, all of which install on Windows without build tools. `backend/requirements-ai.txt` is no longer used by any code.
+
+### What was added
+
+- `POST /ingest/fhir`: validates a FHIR R4 Bundle (Patient, Condition, Observation) with Pydantic models in `backend/app/schemas.py`, maps valid resources into a new `patients` table, and stores invalid records in `ingestion_rejects` with the reason (`backend/app/fhir.py`).
+- `POST /ingest/cda`: parses a C-CDA XML document with lxml into the same patient model, with entity resolution and network access disabled in the parser (`backend/app/cda.py`).
+- `backend/app/mapping.py`: shared SNOMED CT and ICD-10 code mapping, blood pressure selection and age calculation used by both ingestion paths.
+- `POST /papers/analyze`: now real retrieval-augmented summarization. Papers are chunked, embedded and stored in `paper_chunks` (pgvector on PostgreSQL, JSON on SQLite); Claude summarizes only from the retrieved chunks and the response lists the source chunks (`backend/app/rag.py`).
+- `POST /chat`: rebuilt around tool calling. Claude calls `discover_cohort`, `dataset_stats` and `search_papers`, and the response carries the sources and tool calls (`backend/app/agent.py`).
+- `POST /chat/stream`: the same agent over server-sent events; the assistant panel renders the answer as it streams (`src/api.ts`, `src/App.tsx`).
+- `backend/evals/golden.json` and `backend/evals/run_evals.py`: 20 questions about the sample dataset with known answers, and a runner that scores correctness and grounding and writes `backend/evals/results.json`.
+- `sample_data/fhir_bundle_synthea_style.json` and `sample_data/ccda_synthea_style.xml`: synthetic, hand-written samples in the shape Synthea produces, including deliberately invalid records.
+
+### Verification
+
+- Backend: 126 unit and endpoint tests pass with the LLM and the embedding model mocked (`npm run backend:test`).
+- Frontend: 33 tests pass, including the server-sent event parser and streaming client (`npm test`); `npm run build` succeeds.
+- The 20 golden answers are checked two ways without the LLM: against the tools, and against an independent pandas calculation.
+- The real embedding model was run locally end to end (download, index, search).
+- Streaming was verified against a real uvicorn server and in the browser using a scripted stand-in for the model.
+
+### Not yet verified
+
+- No live Claude call has been made: no API key was available in the development environment. The eval score in `backend/evals/results.json` does not exist until `run_evals.py` is run with a key.
+- The PostgreSQL and pgvector path has not been run, because Docker is not installed on this machine. The pgvector column type and the cosine-distance query are checked at the SQL level only.
+- The sample FHIR and C-CDA files follow Synthea's structure but were not generated by Synthea.

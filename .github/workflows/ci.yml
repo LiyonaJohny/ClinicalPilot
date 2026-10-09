@@ -15,6 +15,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm test
       - run: npm run build
 
   backend:
@@ -26,3 +27,6 @@ jobs:
           python-version: "3.12"
       - run: pip install -r backend/requirements.txt
       - run: python -m compileall backend/app
+      # The LLM and the embedding model are mocked, so no API key or model download is needed.
+      - run: python -m unittest discover -s backend/tests -v
+      - run: python backend/evals/run_evals.py --check-golden

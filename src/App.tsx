@@ -84,7 +84,6 @@ import {
 } from 'recharts';
 import {
   analyzePaper,
-  chatWithDataset,
   checkProtocol,
   type CohortDiscoveryResponse,
   type DatasetProfile,
@@ -92,6 +91,8 @@ import {
   type PaperAnalysisResponse,
   profileDataset,
   type ProtocolCheckResponse,
+  saveGeneratedReport,
+  streamChat,
 } from './api';
 import { getActivityRoute } from './activityRouting';
 import {
@@ -136,6 +137,21 @@ function downloadTextFile(filename: string, content: string, type = 'text/plain'
   URL.revokeObjectURL(url);
 }
 
+type AskChat = (question: string, onProgress?: (partial: string) => void) => Promise<{ answer: string; sources: string[] }>;
+
+const askChat: AskChat = (question, onProgress) => {
+  let partial = '';
+  return streamChat(question, (event) => {
+    if (event.event === 'token') {
+      partial += event.data.text;
+      onProgress?.(partial);
+    } else if (event.event === 'tool_call') {
+      // Text before a tool call is not the answer, so start over once the tool has run.
+      partial = '';
+      onProgress?.(`Running ${event.data.name}...`);
+    }
+  });
+};
 
 function App() {
   const [active, setActive] = useState<NavKey>('dashboard');
@@ -163,9 +179,24 @@ function App() {
     downloadTextFile('clinicalpilot-cohort.csv', toCsv(cohortRows.map((row) => ({ ...row, diagnosis: row.diagnosis.join('; ') }))), 'text/csv');
     notify('Cohort export generated.');
   };
-  const exportReport = () => {
-    downloadTextFile('clinicalpilot-study-report.txt', buildStudyReportText(), 'text/plain');
-    notify('Study report exported.');
+  const exportReport = async () => {
+    const content = buildStudyReportText();
+    try {
+      const saved = await saveGeneratedReport({
+        title: 'Hypertension Efficacy Analysis Q3',
+        dataset_name: clinicalAnalytics.datasetName,
+        content,
+        metadata: {
+          totalPatients: clinicalAnalytics.totalPatients,
+          qualityScore: clinicalAnalytics.qualityScore,
+          treatmentEffectiveness: clinicalAnalytics.treatmentEffectiveness,
+        },
+      });
+      notify(`Study report saved to backend history as report #${saved.id}.`);
+    } catch (error) {
+      notify(`Study report downloaded locally, but backend persistence is unavailable: ${error instanceof Error ? error.message : 'unknown error'}.`);
+    }
+    downloadTextFile('clinicalpilot-study-report.txt', content, 'text/plain');
   };
 
   const title = useMemo(() => getPageTitle(active, clinicalAnalytics.datasetName), [active]);
@@ -268,7 +299,7 @@ function App() {
           </Stack>
 
           {active === 'dashboard' && <DashboardView onAction={notify} onNavigate={setActive} />}
-          {active === 'datasets' && <DatasetView chatInput={chatInput} setChatInput={setChatInput} onAction={notify} onExportDataset={exportDataset} datasetProfile={datasetProfile} onAskChat={chatWithDataset} />}
+          {active === 'datasets' && <DatasetView chatInput={chatInput} setChatInput={setChatInput} onAction={notify} onExportDataset={exportDataset} datasetProfile={datasetProfile} onAskChat={askChat} />}
           {active === 'papers' && <PaperAnalyzerView paperName={uploadedPaperName} paperAnalysis={paperAnalysis} onUploadPaper={requestPaperUpload} onAction={notify} onExportReport={exportReport} />}
           {active === 'cohorts' && <CohortDiscoveryView onAction={notify} cohortDiscovery={cohortDiscovery} protocolCheck={protocolCheck} onDiscoverCohort={async (filters) => {
             const result = await discoverCohort(filters);
@@ -279,7 +310,7 @@ function App() {
             setProtocolCheck(result);
             return result;
           }} />}
-          {active === 'reports' && <ReportsView chatInput={chatInput} setChatInput={setChatInput} onAction={notify} onExportReport={exportReport} onAskChat={chatWithDataset} />}
+          {active === 'reports' && <ReportsView chatInput={chatInput} setChatInput={setChatInput} onAction={notify} onExportReport={exportReport} onAskChat={askChat} />}
           {active === 'simulator' && <SimulatorView onAction={notify} />}
         </Box>
       </Box>
@@ -694,7 +725,7 @@ function DatasetView({
   onAction: ActionHandler;
   onExportDataset: () => void;
   datasetProfile: DatasetProfile | null;
-  onAskChat: (question: string) => Promise<{ answer: string; sources: string[] }>;
+  onAskChat: AskChat;
 }) {
   const [showIssuesOnly, setShowIssuesOnly] = useState(false);
   const visibleRows = showIssuesOnly ? patientRows.filter((row) => row.quality !== 'Clean') : patientRows;
@@ -1271,7 +1302,7 @@ function ReportsView({
   setChatInput: (value: string) => void;
   onAction: ActionHandler;
   onExportReport: () => void;
-  onAskChat: (question: string) => Promise<{ answer: string; sources: string[] }>;
+  onAskChat: AskChat;
 }) {
   const [reportTitle, setReportTitle] = useState('Hypertension Efficacy Analysis Q3');
   const [reportType, setReportType] = useState('Detailed Analysis');
@@ -1388,9 +1419,10 @@ function AssistantPanel({
   setChatInput: (value: string) => void;
   context: 'dataset' | 'report';
   onAction: ActionHandler;
-  onAskChat: (question: string) => Promise<{ answer: string; sources: string[] }>;
+  onAskChat: AskChat;
 }) {
   const [messages, setMessages] = useState<string[]>([]);
+  const [streaming, setStreaming] = useState<{ question: string; partial: string } | null>(null);
   const sendMessage = async () => {
     const question = chatInput.trim();
     if (!question) {
@@ -1401,13 +1433,15 @@ function AssistantPanel({
         context === 'dataset'
           ? `${clinicalAnalytics.diabeticHypertensionPercent}% of diabetic patients also have hypertension; ${clinicalAnalytics.missingBpCount} BP records still need review.`
           : `The active draft uses ${clinicalAnalytics.totalPatients} unique patients, a ${clinicalAnalytics.qualityScore}% quality score, and ${clinicalAnalytics.treatmentEffectiveness}% Compound-X controlled outcomes.`;
+    setStreaming({ question, partial: '' });
     try {
-      const response = await onAskChat(question);
+      const response = await onAskChat(question, (partial) => setStreaming({ question, partial }));
       answer = `${response.answer}${response.sources.length ? ` Sources: ${response.sources.join(', ')}` : ''}`;
       onAction('Pilot AI answered from the ClinicalPilot API.');
     } catch (error) {
       onAction(`Chat API unavailable: ${error instanceof Error ? error.message : 'unknown error'}. Showing local fallback answer.`);
     }
+    setStreaming(null);
     setMessages((current) => [`Q: ${question}`, `A: ${answer}`, ...current].slice(0, 6));
     setChatInput('');
   };
@@ -1445,6 +1479,16 @@ function AssistantPanel({
               </ListItemButton>
             ))}
           </List>
+          {streaming && (
+            <>
+              <Paper variant="outlined" sx={{ p: 1.5, mb: 1 }}>
+                <Typography variant="body2">Q: {streaming.question}</Typography>
+              </Paper>
+              <Paper variant="outlined" sx={{ p: 1.5, mb: 1, borderColor: 'primary.main' }}>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>A: {streaming.partial || 'Thinking...'}</Typography>
+              </Paper>
+            </>
+          )}
           {messages.map((message) => (
             <Paper key={message} variant="outlined" sx={{ p: 1.5, mb: 1 }}>
               <Typography variant="body2">{message}</Typography>

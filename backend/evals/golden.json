@@ -1,0 +1,152 @@
+{
+  "dataset": "sample_data/cardiovascular_phase_ii.csv",
+  "description": "Twenty questions about the packaged sample dataset with known answers. All counts are over unique patients (the duplicate PatientID row is counted once). Each item carries a check: the tool call that reproduces the expected value without the LLM.",
+  "items": [
+    {
+      "id": "q01",
+      "question": "How many unique patients are in the dataset?",
+      "answer_type": "number",
+      "expected": 17,
+      "check": {"tool": "dataset_stats", "input": {}, "path": "unique_patients"}
+    },
+    {
+      "id": "q02",
+      "question": "How many duplicate rows, meaning rows that repeat a PatientID, does the dataset contain?",
+      "answer_type": "number",
+      "expected": 1,
+      "check": {"tool": "dataset_stats", "input": {}, "path": "duplicate_rows"}
+    },
+    {
+      "id": "q03",
+      "question": "How many patients have type 2 diabetes?",
+      "answer_type": "number",
+      "expected": 9,
+      "check": {"tool": "discover_cohort", "input": {"filters": {"diabetes_type2": true}}, "path": "matching_patients"}
+    },
+    {
+      "id": "q04",
+      "question": "How many patients have hypertension?",
+      "answer_type": "number",
+      "expected": 8,
+      "check": {"tool": "discover_cohort", "input": {"filters": {"hypertension": true}}, "path": "matching_patients"}
+    },
+    {
+      "id": "q05",
+      "question": "How many patients have kidney disease?",
+      "answer_type": "number",
+      "expected": 1,
+      "check": {"tool": "discover_cohort", "input": {"filters": {"kidney_disease": true}}, "path": "matching_patients"}
+    },
+    {
+      "id": "q06",
+      "question": "How many patients have both type 2 diabetes and hypertension?",
+      "answer_type": "number",
+      "expected": 4,
+      "check": {"tool": "discover_cohort", "input": {"filters": {"diabetes_type2": true, "hypertension": true}}, "path": "matching_patients"}
+    },
+    {
+      "id": "q07",
+      "question": "What percentage of patients with type 2 diabetes also have hypertension? Round to the nearest whole percent.",
+      "answer_type": "number",
+      "expected": 44,
+      "tolerance": 0.5,
+      "check": {"tool": "dataset_stats", "input": {"column": "Hypertension", "filters": {"diabetes_type2": true}}, "path": "true_percent"}
+    },
+    {
+      "id": "q08",
+      "question": "How many patients are missing a systolic blood pressure reading?",
+      "answer_type": "number",
+      "expected": 3,
+      "check": {"tool": "dataset_stats", "input": {"column": "SystolicBP"}, "path": "missing"}
+    },
+    {
+      "id": "q09",
+      "question": "How many patients have a systolic blood pressure of 140 mmHg or higher?",
+      "answer_type": "number",
+      "expected": 9,
+      "check": {"tool": "discover_cohort", "input": {"filters": {"min_systolic_bp": 140}}, "path": "matching_patients"}
+    },
+    {
+      "id": "q10",
+      "question": "What is the highest systolic blood pressure recorded in the dataset, in mmHg?",
+      "answer_type": "number",
+      "expected": 170,
+      "check": {"tool": "dataset_stats", "input": {"column": "SystolicBP"}, "path": "max"}
+    },
+    {
+      "id": "q11",
+      "question": "Which patient ID has the highest systolic blood pressure?",
+      "answer_type": "text",
+      "expected": "CP-10017",
+      "check": {"tool": "dataset_stats", "input": {"column": "SystolicBP"}, "path": "max_patient_ids.0"}
+    },
+    {
+      "id": "q12",
+      "question": "How many patients are in the Compound-X treatment arm?",
+      "answer_type": "number",
+      "expected": 9,
+      "check": {"tool": "discover_cohort", "input": {"filters": {"treatment": "Compound-X"}}, "path": "matching_patients"}
+    },
+    {
+      "id": "q13",
+      "question": "How many patients on Standard Care have a Controlled outcome?",
+      "answer_type": "number",
+      "expected": 3,
+      "check": {"tool": "discover_cohort", "input": {"filters": {"treatment": "Standard Care", "outcome": "Controlled"}}, "path": "matching_patients"}
+    },
+    {
+      "id": "q14",
+      "question": "How many patients have a Readmitted outcome?",
+      "answer_type": "number",
+      "expected": 2,
+      "check": {"tool": "discover_cohort", "input": {"filters": {"outcome": "Readmitted"}}, "path": "matching_patients"}
+    },
+    {
+      "id": "q15",
+      "question": "How many patients were enrolled at site NYC-01?",
+      "answer_type": "number",
+      "expected": 7,
+      "check": {"tool": "discover_cohort", "input": {"filters": {"site": "NYC-01"}}, "path": "matching_patients"}
+    },
+    {
+      "id": "q16",
+      "question": "How many female patients are in the dataset?",
+      "answer_type": "number",
+      "expected": 9,
+      "check": {"tool": "discover_cohort", "input": {"filters": {"gender": "F"}}, "path": "matching_patients"}
+    },
+    {
+      "id": "q17",
+      "question": "How many patients have an implausible age, outside the range 0 to 120?",
+      "answer_type": "number",
+      "expected": 1,
+      "check": {"tool": "dataset_stats", "input": {}, "path": "invalid_ages"}
+    },
+    {
+      "id": "q18",
+      "question": "What is the mean patient age, excluding implausible ages? Give one decimal place.",
+      "answer_type": "number",
+      "expected": 59.3,
+      "tolerance": 0.05,
+      "check": {"tool": "dataset_stats", "input": {"column": "Age"}, "path": "valid_only.mean"}
+    },
+    {
+      "id": "q19",
+      "question": "How many patients with type 2 diabetes are older than 60 and have a systolic blood pressure of 140 mmHg or higher?",
+      "answer_type": "number",
+      "expected": 5,
+      "check": {
+        "tool": "discover_cohort",
+        "input": {"filters": {"diabetes_type2": true, "min_age": 61, "min_systolic_bp": 140, "exclude_invalid_age": true}},
+        "path": "matching_patients"
+      }
+    },
+    {
+      "id": "q20",
+      "question": "What is the median systolic blood pressure across patients who have a reading, in mmHg?",
+      "answer_type": "number",
+      "expected": 141,
+      "check": {"tool": "dataset_stats", "input": {"column": "SystolicBP"}, "path": "median"}
+    }
+  ]
+}
