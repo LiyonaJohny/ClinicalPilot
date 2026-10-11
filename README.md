@@ -1,5 +1,7 @@
 # ClinicalPilot AI
 
+Originally built for my MCA (Jul 2025 - Mar 2026); moved to GitHub and extended in 2026.
+
 ClinicalPilot AI is a web-based clinical research suite for uploading datasets, identifying data-quality issues, analyzing cohorts, extracting study-paper insights, generating study reports, and chatting with research data.
 
 ## Architecture
